@@ -1,4 +1,4 @@
-import { readFile, stat } from 'node:fs/promises'
+import { open } from 'node:fs/promises'
 import * as path from 'node:path'
 import {
   optionalInstallableToolchain,
@@ -18,12 +18,18 @@ type ParsedValue = string | readonly string[]
 const MAX_TOOLCHAIN_FILE_BYTES = 64 * 1024
 
 export async function readToolchainFile(file: string): Promise<ToolchainFileConfig> {
-  const details = await stat(file)
-  if (details.size > MAX_TOOLCHAIN_FILE_BYTES) {
-    throw new Error(`Rust toolchain file exceeds ${String(MAX_TOOLCHAIN_FILE_BYTES)} bytes`)
+  const handle = await open(file, 'r')
+  try {
+    const details = await handle.stat()
+    if (!details.isFile()) throw new Error('Rust toolchain policy is not a regular file')
+    if (details.size > MAX_TOOLCHAIN_FILE_BYTES) {
+      throw new Error(`Rust toolchain file exceeds ${String(MAX_TOOLCHAIN_FILE_BYTES)} bytes`)
+    }
+    const contents = await handle.readFile({ encoding: 'utf8' })
+    return parseToolchainFile(contents, path.basename(file))
+  } finally {
+    await handle.close()
   }
-  const contents = await readFile(file, 'utf8')
-  return parseToolchainFile(contents, path.basename(file))
 }
 
 export function parseToolchainFile(contents: string, filename: string): ToolchainFileConfig {

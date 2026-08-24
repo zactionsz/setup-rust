@@ -40,12 +40,20 @@ const path = __importStar(require("node:path"));
 const contracts_1 = require("./contracts");
 const MAX_TOOLCHAIN_FILE_BYTES = 64 * 1024;
 async function readToolchainFile(file) {
-    const details = await (0, promises_1.stat)(file);
-    if (details.size > MAX_TOOLCHAIN_FILE_BYTES) {
-        throw new Error(`Rust toolchain file exceeds ${String(MAX_TOOLCHAIN_FILE_BYTES)} bytes`);
+    const handle = await (0, promises_1.open)(file, 'r');
+    try {
+        const details = await handle.stat();
+        if (!details.isFile())
+            throw new Error('Rust toolchain policy is not a regular file');
+        if (details.size > MAX_TOOLCHAIN_FILE_BYTES) {
+            throw new Error(`Rust toolchain file exceeds ${String(MAX_TOOLCHAIN_FILE_BYTES)} bytes`);
+        }
+        const contents = await handle.readFile({ encoding: 'utf8' });
+        return parseToolchainFile(contents, path.basename(file));
     }
-    const contents = await (0, promises_1.readFile)(file, 'utf8');
-    return parseToolchainFile(contents, path.basename(file));
+    finally {
+        await handle.close();
+    }
 }
 function parseToolchainFile(contents, filename) {
     if (contents.includes('\0'))
