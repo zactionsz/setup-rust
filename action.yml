@@ -1,0 +1,53 @@
+name: Set up Rust
+description: Install and select an explicit Rust toolchain without hidden cache or compiler policy
+author: zactionsz
+
+inputs:
+  toolchain:
+    description: Rustup toolchain name; when omitted, a repository toolchain file is required
+    required: false
+  profile:
+    description: Rustup profile (minimal, default, or complete); explicit installs default to minimal
+    required: false
+  components:
+    description: Comma- or whitespace-separated rustup components to install
+    required: false
+  targets:
+    description: Comma- or whitespace-separated compilation targets to install
+    required: false
+  working-directory:
+    description: Repository-relative directory used to discover a Rust toolchain file
+    required: false
+    default: "."
+  update:
+    description: Update an already installed moving toolchain such as stable
+    required: false
+    default: "true"
+  allow-downgrade:
+    description: Allow rustup to select an older toolchain when requested components are unavailable
+    required: false
+    default: "false"
+
+outputs:
+  toolchain:
+    description: Fully resolved rustup toolchain name
+  toolchain-source:
+    description: Input or repository toolchain file that selected the toolchain
+  rustc-version:
+    description: Rust compiler release reported by rustc
+  rustc-commit:
+    description: Rust compiler commit hash reported by rustc
+  cargo-version:
+    description: Cargo version reported by cargo
+  rustup-version:
+    description: Rustup version reported by rustup
+  host:
+    description: Host target reported by rustc
+
+runs:
+  using: node24
+  main: dist/index.js
+
+branding:
+  icon: download
+  color: orange

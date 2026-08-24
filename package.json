@@ -1,0 +1,21 @@
+{
+  "name": "setup-rust-action",
+  "version": "0.0.0",
+  "private": true,
+  "description": "A narrow GitHub Action for installing and selecting Rust toolchains",
+  "license": "MIT",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "check": "scripts/check",
+    "check:dist": "git diff --exit-code -- dist",
+    "lint": "node --check dist/action.js && node --check dist/contracts.js && node --check dist/github.js && node --check dist/index.js && node --check dist/process.js && node --check dist/workspace.js && node --check tests/action.test.js && node --check tests/contracts.test.js && node --check tests/process.test.js && node --check tests/setup-contract.js && node --check tests/workspace.test.js",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "devDependencies": {
+    "@types/node": "24.13.3",
+    "typescript": "7.0.2"
+  }
+}

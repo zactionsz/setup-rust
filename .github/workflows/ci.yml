@@ -1,0 +1,158 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  schedule:
+    - cron: "23 8 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: setup-rust-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Install actionlint
+        env:
+          ACTIONLINT_SHA256: 8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8
+          ACTIONLINT_VERSION: 1.7.12
+        run: |
+          archive="$RUNNER_TEMP/actionlint.tar.gz"
+          bin="$RUNNER_TEMP/actionlint-bin"
+          curl --proto '=https' --tlsv1.2 --fail --silent --show-error --location \
+            --output "$archive" \
+            "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
+          echo "$ACTIONLINT_SHA256  $archive" | sha256sum --check --strict
+          mkdir -p "$bin"
+          tar -xzf "$archive" -C "$bin" actionlint
+          echo "$bin" >> "$GITHUB_PATH"
+
+      - name: Check repository
+        run: scripts/check
+
+      - name: Check dependency vulnerabilities
+        run: npm audit
+
+      - name: Check clean generated state
+        run: git diff --exit-code
+
+  dependency-review:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Review dependency changes
+        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          fail-on-severity: moderate
+
+  explicit-toolchain:
+    name: explicit / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-24.04
+          - macos-15
+          - windows-2025
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up exact Rust
+        id: rust
+        uses: ./
+        with:
+          toolchain: "1.88.0"
+          components: rustfmt,clippy
+          targets: wasm32-unknown-unknown
+
+      - name: Verify setup contract
+        env:
+          EXPECTED_RUST_VERSION: "1.88.0"
+          EXPECTED_TOOLCHAIN_SOURCE: input
+          INSTALLED_CARGO_VERSION: ${{ steps.rust.outputs.cargo-version }}
+          INSTALLED_HOST: ${{ steps.rust.outputs.host }}
+          INSTALLED_RUSTC_VERSION: ${{ steps.rust.outputs.rustc-version }}
+          INSTALLED_RUSTUP_VERSION: ${{ steps.rust.outputs.rustup-version }}
+          INSTALLED_TOOLCHAIN: ${{ steps.rust.outputs.toolchain }}
+          INSTALLED_TOOLCHAIN_SOURCE: ${{ steps.rust.outputs.toolchain-source }}
+        run: node tests/setup-contract.js
+
+  file-toolchain:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Rust from a toolchain file
+        id: rust
+        uses: ./
+        with:
+          working-directory: tests/fixtures/file-toolchain
+
+      - name: Verify setup contract
+        env:
+          EXPECTED_RUST_VERSION: "1.88.0"
+          EXPECTED_TOOLCHAIN_SOURCE: tests/fixtures/file-toolchain/rust-toolchain.toml
+          INSTALLED_CARGO_VERSION: ${{ steps.rust.outputs.cargo-version }}
+          INSTALLED_HOST: ${{ steps.rust.outputs.host }}
+          INSTALLED_RUSTC_VERSION: ${{ steps.rust.outputs.rustc-version }}
+          INSTALLED_RUSTUP_VERSION: ${{ steps.rust.outputs.rustup-version }}
+          INSTALLED_TOOLCHAIN: ${{ steps.rust.outputs.toolchain }}
+          INSTALLED_TOOLCHAIN_SOURCE: ${{ steps.rust.outputs.toolchain-source }}
+        run: node tests/setup-contract.js
+
+  fail-closed:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Reject implicit runner Rust
+        id: rust
+        continue-on-error: true
+        uses: ./
+
+      - name: Require a closed failure
+        env:
+          SETUP_OUTCOME: ${{ steps.rust.outcome }}
+        run: test "$SETUP_OUTCOME" = failure
