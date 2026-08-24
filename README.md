@@ -22,7 +22,7 @@ components = ["clippy", "rustfmt"]
 
 ```yaml
 - name: Set up Rust
-  uses: zactionsz/setup-rust@329a2736cd0ad2a71140f3fb6011f5abbd8fb5a1
+  uses: zactionsz/setup-rust@8a57ecfd865b04df6fd794ba3a40049c2c563867
 ```
 
 An explicit input overrides any repository toolchain file. This is useful for
@@ -31,7 +31,7 @@ compatibility and latest-stable jobs:
 ```yaml
 - name: Set up Rust 1.88
   id: rust
-  uses: zactionsz/setup-rust@329a2736cd0ad2a71140f3fb6011f5abbd8fb5a1
+  uses: zactionsz/setup-rust@8a57ecfd865b04df6fd794ba3a40049c2c563867
   with:
     toolchain: "1.88.0"
     components: rustfmt,clippy
