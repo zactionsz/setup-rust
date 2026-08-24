@@ -1,17 +1,28 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.optionalToolchain = optionalToolchain;
+exports.optionalInstallableToolchain = optionalInstallableToolchain;
 exports.optionalProfile = optionalProfile;
 exports.rustupList = rustupList;
+exports.rustupItems = rustupItems;
 exports.booleanInput = booleanInput;
 exports.nonEmptyDirectory = nonEmptyDirectory;
 const RUSTUP_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]*$/u;
+const INSTALLABLE_TOOLCHAIN_PATTERN = /^(?:stable|beta|nightly|\d+\.\d+(?:\.\d+)?(?:-beta(?:\.\d+)?)?)(?:-[A-Za-z0-9][A-Za-z0-9._-]*)?$/u;
 const PROFILES = new Set(['minimal', 'default', 'complete']);
 function optionalToolchain(value) {
     const toolchain = value.trim();
     if (toolchain.length === 0)
         return undefined;
     requireRustupName(toolchain, 'toolchain');
+    return toolchain;
+}
+function optionalInstallableToolchain(value) {
+    const toolchain = optionalToolchain(value);
+    if (toolchain && !INSTALLABLE_TOOLCHAIN_PATTERN.test(toolchain)) {
+        throw new Error(`Invalid toolchain ${JSON.stringify(value)}; expected an installable stable, beta, nightly, ` +
+            'or versioned rustup channel');
+    }
     return toolchain;
 }
 function optionalProfile(value) {
@@ -28,6 +39,9 @@ function rustupList(value, inputName) {
         .split(/[\s,]+/u)
         .map((item) => item.trim())
         .filter((item) => item.length > 0);
+    return rustupItems(items, inputName);
+}
+function rustupItems(items, inputName) {
     const unique = [];
     const seen = new Set();
     for (const item of items) {

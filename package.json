@@ -8,8 +8,8 @@
     "build": "tsc -p tsconfig.json",
     "check": "scripts/check",
     "check:dist": "git diff --exit-code -- dist",
-    "lint": "node --check dist/action.js && node --check dist/contracts.js && node --check dist/github.js && node --check dist/index.js && node --check dist/process.js && node --check dist/workspace.js && node --check tests/action.test.js && node --check tests/contracts.test.js && node --check tests/process.test.js && node --check tests/setup-contract.js && node --check tests/workspace.test.js",
-    "test": "node --test"
+    "lint": "node --check dist/action.js && node --check dist/contracts.js && node --check dist/github.js && node --check dist/index.js && node --check dist/process.js && node --check dist/rustup.js && node --check dist/toolchain-file.js && node --check dist/workspace.js && node --check tests/action.test.js && node --check tests/contracts.test.js && node --check tests/process.test.js && node --check tests/setup-contract.js && node --check tests/toolchain-file.test.js && node --check tests/workspace.test.js",
+    "test": "node --test --experimental-test-coverage --test-coverage-include=dist/*.js --test-coverage-lines=90 --test-coverage-branches=75 --test-coverage-functions=80"
   },
   "engines": {
     "node": ">=24"

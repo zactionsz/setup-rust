@@ -41,6 +41,17 @@ test('rejects lexical and symlink escapes from the workspace', async (context) =
   const link = path.join(root, 'outside')
   await symlink(outside, link, 'dir')
   await assert.rejects(resolveWorkspacePaths(root, 'outside'), /must remain inside/u)
+
+  const externalToolchain = path.join(outside, 'external-toolchain.toml')
+  await writeFile(externalToolchain, '[toolchain]\nchannel = "stable"\n')
+  await symlink(externalToolchain, path.join(root, 'rust-toolchain.toml'))
+  await assert.rejects(resolveWorkspacePaths(root, '.'), /toolchain file must remain inside/iu)
+})
+
+test('rejects a directory named like a toolchain file', async (context) => {
+  const root = await fixture(context)
+  await mkdir(path.join(root, 'rust-toolchain.toml'))
+  await assert.rejects(resolveWorkspacePaths(root, '.'), /is not a file/u)
 })
 
 async function fixture(context) {

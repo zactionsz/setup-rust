@@ -14,6 +14,7 @@ git diff --check
 Requirements:
 
 - preserve the fail-closed toolchain selection contract;
+- test rustup semantics against isolated persistent runner state, not only fake argv;
 - pass external values to child processes as arguments, never shell text;
 - add a failure-path test for every new input or process boundary;
 - keep Cargo tools, native packages, caching, and compiler flags out of scope;

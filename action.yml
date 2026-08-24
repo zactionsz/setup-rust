@@ -4,7 +4,7 @@ author: zactionsz
 
 inputs:
   toolchain:
-    description: Rustup toolchain name; when omitted, a repository toolchain file is required
+    description: Installable rustup channel; when omitted, a supported repository toolchain file is required
     required: false
   profile:
     description: Rustup profile (minimal, default, or complete); explicit installs default to minimal
@@ -20,11 +20,11 @@ inputs:
     required: false
     default: "."
   update:
-    description: Update an already installed moving toolchain such as stable
+    description: Update an installed moving toolchain; false still adds missing components and targets
     required: false
     default: "true"
   allow-downgrade:
-    description: Allow rustup to select an older toolchain when requested components are unavailable
+    description: With updates enabled, allow an older toolchain when requested components are unavailable
     required: false
     default: "false"
 

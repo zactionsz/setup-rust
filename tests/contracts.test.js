@@ -5,6 +5,7 @@ const { test } = require('node:test')
 const {
   booleanInput,
   nonEmptyDirectory,
+  optionalInstallableToolchain,
   optionalProfile,
   optionalToolchain,
   rustupList
@@ -18,6 +19,16 @@ test('accepts an explicit rustup toolchain name', () => {
 test('rejects toolchain values that could become command options', () => {
   assert.throws(() => optionalToolchain('--help'), /Invalid toolchain item/u)
   assert.throws(() => optionalToolchain('stable latest'), /Invalid toolchain item/u)
+})
+
+test('accepts only installable distribution toolchains at the action boundary', () => {
+  assert.equal(optionalInstallableToolchain('stable'), 'stable')
+  assert.equal(
+    optionalInstallableToolchain('nightly-2026-08-01-x86_64-unknown-linux-gnu'),
+    'nightly-2026-08-01-x86_64-unknown-linux-gnu'
+  )
+  assert.equal(optionalInstallableToolchain('1.88.0-beta.1'), '1.88.0-beta.1')
+  assert.throws(() => optionalInstallableToolchain('review-custom'), /expected an installable/u)
 })
 
 test('parses and deduplicates rustup lists without reordering them', () => {

@@ -124,6 +124,8 @@ jobs:
         id: rust
         uses: ./
         with:
+          components: rustfmt,clippy
+          targets: wasm32-unknown-unknown
           working-directory: tests/fixtures/file-toolchain
 
       - name: Verify setup contract
@@ -137,6 +139,105 @@ jobs:
           INSTALLED_TOOLCHAIN: ${{ steps.rust.outputs.toolchain }}
           INSTALLED_TOOLCHAIN_SOURCE: ${{ steps.rust.outputs.toolchain-source }}
         run: node tests/setup-contract.js
+
+  file-toolchain-platforms:
+    name: file / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - macos-15
+          - windows-2025
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Rust from a toolchain file
+        id: rust
+        uses: ./
+        with:
+          components: rustfmt,clippy
+          targets: wasm32-unknown-unknown
+          working-directory: tests/fixtures/file-toolchain
+
+      - name: Verify setup contract
+        env:
+          EXPECTED_RUST_VERSION: "1.88.0"
+          EXPECTED_TOOLCHAIN_SOURCE: tests/fixtures/file-toolchain/rust-toolchain.toml
+          INSTALLED_CARGO_VERSION: ${{ steps.rust.outputs.cargo-version }}
+          INSTALLED_HOST: ${{ steps.rust.outputs.host }}
+          INSTALLED_RUSTC_VERSION: ${{ steps.rust.outputs.rustc-version }}
+          INSTALLED_RUSTUP_VERSION: ${{ steps.rust.outputs.rustup-version }}
+          INSTALLED_TOOLCHAIN: ${{ steps.rust.outputs.toolchain }}
+          INSTALLED_TOOLCHAIN_SOURCE: ${{ steps.rust.outputs.toolchain-source }}
+        run: node tests/setup-contract.js
+
+  runner-state:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Seed a conflicting rustup directory override
+        run: rustup override set stable --path tests/fixtures/file-toolchain
+
+      - name: Set up file-selected Rust above the override
+        id: file-state
+        uses: ./
+        with:
+          components: rustfmt,clippy
+          targets: wasm32-unknown-unknown
+          working-directory: tests/fixtures/file-toolchain
+
+      - name: Verify repository selection won
+        env:
+          EXPECTED_RUST_VERSION: "1.88.0"
+          EXPECTED_TOOLCHAIN_SOURCE: tests/fixtures/file-toolchain/rust-toolchain.toml
+          INSTALLED_CARGO_VERSION: ${{ steps.file-state.outputs.cargo-version }}
+          INSTALLED_HOST: ${{ steps.file-state.outputs.host }}
+          INSTALLED_RUSTC_VERSION: ${{ steps.file-state.outputs.rustc-version }}
+          INSTALLED_RUSTUP_VERSION: ${{ steps.file-state.outputs.rustup-version }}
+          INSTALLED_TOOLCHAIN: ${{ steps.file-state.outputs.toolchain }}
+          INSTALLED_TOOLCHAIN_SOURCE: ${{ steps.file-state.outputs.toolchain-source }}
+        run: node tests/setup-contract.js
+
+      - name: Use an isolated rustup home with no default
+        run: echo "RUSTUP_HOME=$RUNNER_TEMP/setup-rust-home" >> "$GITHUB_ENV"
+
+      - name: Set up without updating or creating a default
+        id: isolated-state
+        uses: ./
+        with:
+          toolchain: "1.88.0"
+          components: rustfmt,clippy
+          targets: wasm32-unknown-unknown
+          update: "false"
+
+      - name: Verify no-update additions
+        env:
+          EXPECTED_RUST_VERSION: "1.88.0"
+          EXPECTED_TOOLCHAIN_SOURCE: input
+          INSTALLED_CARGO_VERSION: ${{ steps.isolated-state.outputs.cargo-version }}
+          INSTALLED_HOST: ${{ steps.isolated-state.outputs.host }}
+          INSTALLED_RUSTC_VERSION: ${{ steps.isolated-state.outputs.rustc-version }}
+          INSTALLED_RUSTUP_VERSION: ${{ steps.isolated-state.outputs.rustup-version }}
+          INSTALLED_TOOLCHAIN: ${{ steps.isolated-state.outputs.toolchain }}
+          INSTALLED_TOOLCHAIN_SOURCE: ${{ steps.isolated-state.outputs.toolchain-source }}
+        run: node tests/setup-contract.js
+
+      - name: Verify the global default remains absent
+        run: |
+          if rustup toolchain list | grep -E '\((active, )?default\)$'; then
+            echo "setup-rust created a global default" >&2
+            exit 1
+          fi
 
   fail-closed:
     runs-on: ubuntu-24.04
