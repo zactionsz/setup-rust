@@ -64,8 +64,16 @@ async function findToolchainFile(workspace, workingDirectory) {
     while (isWithin(workspace, current)) {
         for (const filename of TOOLCHAIN_FILES) {
             const candidate = path.join(current, filename);
-            if (await exists(candidate))
+            if (await exists(candidate)) {
+                const resolved = await (0, promises_1.realpath)(candidate);
+                if (!isWithin(workspace, resolved)) {
+                    throw new Error('Rust toolchain file must remain inside GITHUB_WORKSPACE');
+                }
+                const details = await (0, promises_1.stat)(resolved);
+                if (!details.isFile())
+                    throw new Error(`${filename} is not a file`);
                 return candidate;
+            }
         }
         if (current === workspace)
             break;

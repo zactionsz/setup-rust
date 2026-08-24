@@ -37,54 +37,48 @@ exports.runAction = runAction;
 const contracts_1 = require("./contracts");
 const github = __importStar(require("./github"));
 const process_1 = require("./process");
+const rustup_1 = require("./rustup");
+const toolchain_file_1 = require("./toolchain-file");
 const workspace_1 = require("./workspace");
 async function runAction(environment = process.env, overrides = {}) {
     const dependencies = { runCommand: process_1.runCommand, ...overrides };
     const inputs = readInputs(environment);
+    requireCompatibleInputs(inputs);
     const workspaceValue = environment.GITHUB_WORKSPACE || process.cwd();
     const paths = await (0, workspace_1.resolveWorkspacePaths)(workspaceValue, inputs.workingDirectory);
     if (!inputs.toolchain && !paths.toolchainFile) {
         throw new Error('No Rust toolchain selected; provide the toolchain input or commit rust-toolchain.toml');
     }
+    const file = inputs.toolchain
+        ? undefined
+        : await (0, toolchain_file_1.readToolchainFile)(requireValue(paths.toolchainFile));
     const toolchainSource = inputs.toolchain
         ? 'input'
         : (0, workspace_1.relativeSource)(paths.workspace, requireValue(paths.toolchainFile));
-    const commandEnvironment = { ...environment };
-    delete commandEnvironment.RUSTUP_TOOLCHAIN;
-    if (inputs.toolchain)
-        commandEnvironment.RUSTUP_TOOLCHAIN = inputs.toolchain;
-    const installArguments = buildInstallArguments(inputs);
+    const selection = selectToolchain(inputs, file);
     github.startGroup(`Install Rust toolchain from ${toolchainSource}`);
+    let installed;
     try {
-        await dependencies.runCommand('rustup', installArguments, {
+        installed = await (0, rustup_1.installRustupToolchain)({
+            ...selection,
+            allowDowngrade: inputs.allowDowngrade,
             cwd: paths.workingDirectory,
-            environment: commandEnvironment
-        });
+            environment,
+            update: inputs.update
+        }, dependencies.runCommand);
     }
     finally {
         github.endGroup();
     }
-    const selected = await dependencies.runCommand('rustup', ['show', 'active-toolchain'], {
-        cwd: paths.workingDirectory,
-        environment: commandEnvironment,
-        quiet: true
-    });
-    const toolchain = parseActiveToolchain(selected.stdout);
-    const selectedEnvironment = { ...commandEnvironment, RUSTUP_TOOLCHAIN: toolchain };
-    const [rustc, cargo, rustup] = await Promise.all([
+    const [rustc, cargo] = await Promise.all([
         dependencies.runCommand('rustc', ['--version', '--verbose'], {
             cwd: paths.workingDirectory,
-            environment: selectedEnvironment,
+            environment: installed.environment,
             quiet: true
         }),
         dependencies.runCommand('cargo', ['--version'], {
             cwd: paths.workingDirectory,
-            environment: selectedEnvironment,
-            quiet: true
-        }),
-        dependencies.runCommand('rustup', ['--version'], {
-            cwd: paths.workingDirectory,
-            environment: selectedEnvironment,
+            environment: installed.environment,
             quiet: true
         })
     ]);
@@ -94,13 +88,18 @@ async function runAction(environment = process.env, overrides = {}) {
         host: rustcDetails.host,
         rustcCommit: rustcDetails.commit,
         rustcVersion: rustcDetails.release,
-        rustupVersion: firstVersionLine(rustup, 'rustup'),
-        toolchain,
+        rustupVersion: installed.rustupVersion,
+        toolchain: installed.toolchain,
         toolchainSource
     };
     await publishResult(result, environment);
     github.info(`Selected Rust ${result.rustcVersion} (${result.host}) from ${result.toolchainSource}`);
     return result;
+}
+function requireCompatibleInputs(inputs) {
+    if (!inputs.update && inputs.allowDowngrade) {
+        throw new Error('allow-downgrade requires update to be true');
+    }
 }
 function readInputs(environment) {
     return {
@@ -108,37 +107,18 @@ function readInputs(environment) {
         components: (0, contracts_1.rustupList)(github.input('components', environment), 'components'),
         profile: (0, contracts_1.optionalProfile)(github.input('profile', environment)),
         targets: (0, contracts_1.rustupList)(github.input('targets', environment), 'targets'),
-        toolchain: (0, contracts_1.optionalToolchain)(github.input('toolchain', environment)),
+        toolchain: (0, contracts_1.optionalInstallableToolchain)(github.input('toolchain', environment)),
         update: (0, contracts_1.booleanInput)(github.input('update', environment) || 'true', 'update'),
         workingDirectory: (0, contracts_1.nonEmptyDirectory)(github.input('working-directory', environment) || '.')
     };
 }
-function buildInstallArguments(inputs) {
-    const arguments_ = ['toolchain', 'install'];
-    if (inputs.toolchain)
-        arguments_.push(inputs.toolchain);
-    const profile = inputs.profile ?? (inputs.toolchain ? 'minimal' : undefined);
-    if (profile)
-        arguments_.push('--profile', profile);
-    if (inputs.components.length > 0) {
-        arguments_.push('--component', inputs.components.join(','));
-    }
-    if (inputs.targets.length > 0)
-        arguments_.push('--target', inputs.targets.join(','));
-    if (!inputs.update)
-        arguments_.push('--no-update');
-    if (inputs.allowDowngrade)
-        arguments_.push('--allow-downgrade');
-    return arguments_;
-}
-function parseActiveToolchain(stdout) {
-    const candidate = stdout.trim().split(/\s+/u)[0];
-    if (!candidate)
-        throw new Error('rustup did not report an active toolchain');
-    const toolchain = (0, contracts_1.optionalToolchain)(candidate);
-    if (!toolchain)
-        throw new Error('rustup reported an empty active toolchain');
-    return toolchain;
+function selectToolchain(inputs, file) {
+    return {
+        components: (0, contracts_1.rustupItems)([...(file?.components ?? []), ...inputs.components], 'components'),
+        profile: inputs.profile ?? file?.profile ?? 'minimal',
+        targets: (0, contracts_1.rustupItems)([...(file?.targets ?? []), ...inputs.targets], 'targets'),
+        toolchain: inputs.toolchain ?? requireValue(file).toolchain
+    };
 }
 function parseRustc(stdout) {
     const values = new Map();
